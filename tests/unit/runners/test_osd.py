@@ -168,11 +168,37 @@ class TestOSDUtil():
                 return { 'node': 'part sdb /dev/sdb1' }
             elif 'ceph-volume lvm zap --destroy ' in cmd_run:
                 return { 'node': 'Zapping successful' }
+            elif 'grep -c' in cmd_run:
+                return { 'node': '0' }
         test_fix.local.cmd.side_effect = cmds_side_effect
         assert test_fix._try_simple_zap() == True
         expected_calls = [call('dummy_host', 'cmd.run', ['ceph-volume raw list | jq \'."1".device\' | xargs -r readlink -e | xargs lsblk -no TYPE,PKNAME,PATH'], tgt_type='glob'), \
                           call('dummy_host', 'cmd.run', ['ceph-volume lvm zap --destroy /dev/sdb1'], tgt_type='glob'),\
+                          call('dummy_host', 'cmd.run', ['grep -c sdb[1-9] /proc/partitions'], tgt_type='glob'),\
                           call('dummy_host', 'cmd.run', ['ceph-volume lvm zap --destroy /dev/sdb'], tgt_type='glob')]
+        assert expected_calls == test_fix.local.cmd.mock_calls
+
+    def test_try_simple_zap_partition_disk_has_more_partitions(self, test_fix):
+        test_fix = test_fix()
+        def cmds_side_effect(*args, **kwargs):
+            assert len(args) == 3
+            assert args[0] == "dummy_host"
+            assert args[1] == "cmd.run"
+            cmd_run_args = args[2]
+            assert len(cmd_run_args) == 1
+            cmd_run = cmd_run_args[0]
+
+            if 'ceph-volume raw list' in cmd_run:
+                return { 'node': 'part sdb /dev/sdb1' }
+            elif 'ceph-volume lvm zap --destroy ' in cmd_run:
+                return { 'node': 'Zapping successful' }
+            elif 'grep -c' in cmd_run:
+                return { 'node': '2' }
+        test_fix.local.cmd.side_effect = cmds_side_effect
+        assert test_fix._try_simple_zap() == True
+        expected_calls = [call('dummy_host', 'cmd.run', ['ceph-volume raw list | jq \'."1".device\' | xargs -r readlink -e | xargs lsblk -no TYPE,PKNAME,PATH'], tgt_type='glob'), \
+                          call('dummy_host', 'cmd.run', ['ceph-volume lvm zap --destroy /dev/sdb1'], tgt_type='glob'),\
+                          call('dummy_host', 'cmd.run', ['grep -c sdb[1-9] /proc/partitions'], tgt_type='glob')]
         assert expected_calls == test_fix.local.cmd.mock_calls
 
     def test_try_simple_zap_disk(self, test_fix):
@@ -272,11 +298,14 @@ class TestOSDUtil():
                 if '/dev/vdd1' in cmd_run:
                     return { 'node': 'Zapping successful' }
                 return { 'node': 'Error message' }
+            elif 'grep -c' in cmd_run:
+                return { 'node': '0' }
         test_fix.local.cmd.side_effect = cmds_side_effect
         with pytest.raises(RuntimeError):
             test_fix._try_simple_zap()
         expected_calls = [call('dummy_host', 'cmd.run', ['ceph-volume raw list | jq \'."1".device\' | xargs -r readlink -e | xargs lsblk -no TYPE,PKNAME,PATH'], tgt_type='glob'), \
                           call('dummy_host', 'cmd.run', ['ceph-volume lvm zap --destroy /dev/vdd1'], tgt_type='glob'),\
+                          call('dummy_host', 'cmd.run', ['grep -c vdd[1-9] /proc/partitions'], tgt_type='glob'),\
                           call('dummy_host', 'cmd.run', ['ceph-volume lvm zap --destroy /dev/vdd'], tgt_type='glob')]
         assert expected_calls == test_fix.local.cmd.mock_calls
 

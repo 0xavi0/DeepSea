@@ -351,6 +351,18 @@ class OSDUtil(Util):
             return False
         return True
 
+    def _number_partitions(self, device_root_name):
+        """ Gets the number of partitions in a device """
+        nb_partitions_cmd = "grep -c {}[1-9] /proc/partitions".format(device_root_name)
+        log.debug("Getting number of partitions of device {}".format(device_root_name))
+        ret = self.local.cmd(self.host, "cmd.run", [nb_partitions_cmd], tgt_type="glob")
+        message = list(ret.values())[0]
+        if not message.isdigit():
+            log.error("Error getting number of partitions of device {0},"
+                      " unexpected output: {1}".format(device_root_name, message))
+            raise RuntimeError
+        return int(message)
+
     def _zap_partition(self, volume_info):
         """ Zaps a partition given the info obtained with lsblk -no TYPE,PKNAME,PATH """
         ret_values = volume_info.split()
@@ -359,8 +371,14 @@ class OSDUtil(Util):
             return False
         if not self._raw_zap(ret_values[2]):
             return False
-        parent_device = "/dev/" + ret_values[1]
-        return self._raw_zap(parent_device)
+        nb_partitions = self._number_partitions(ret_values[1])
+        if nb_partitions == 0:
+            parent_device = "/dev/" + ret_values[1]
+            return self._raw_zap(parent_device)
+        else:
+            log.info("Device {0} has still {1} partitions."
+                     " Not zapping the whole device...".format(ret_values[1], nb_partitions))
+        return True
 
     def _zap_disk(self, volume_info):
         """ Zaps a disk given the info obtained with lsblk -no TYPE,PKNAME,PATH """
